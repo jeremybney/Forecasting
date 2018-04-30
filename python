@@ -1,0 +1,164 @@
+# -*- coding: utf-8 -*-
+"""
+Data Science Workshop: Text Preprocessing
+"""
+
+#%% Set-up
+
+import pickle
+import pandas as pd
+import numpy as np
+import spacy
+nlp = spacy.load(r'C:\Anaconda\envs\py36\Lib\site-packages\en_core_web_md-2.0.0\en_core_web_md\en_core_web_md-2.0.0')
+from collections import Counter
+
+#%% Get data
+
+#from sklearn.datasets import fetch_20newsgroups
+#newsgroups_train = fetch_20newsgroups(subset='train')
+#data = newsgroups_train.data
+
+with open(r'./newsgroups.p', 'rb') as f:
+    data = pickle.load(f)
+df = pd.DataFrame({'Text': data})
+
+#%% View sample
+
+for _,row in df.sample(5).iterrows():
+    print(repr(row['Text']))
+    print()
+        
+#%% Tokenization
+    
+# simple version:
+#df['Tokens'] = df['Text'].apply(lambda text: text.split())
+    
+# more sophisticated version:
+df['Doc'] = df['Text'].apply(lambda text: nlp(text))
+df['Tokens'] = df['Doc'].apply(lambda doc: [t for t in doc])
+
+for _,row in df.sample(5).iterrows():
+    print([t.text for t in row['Tokens']])
+    print()
+    
+#%% Initial preprocessing steps (to do before calculating document frequency)
+
+# Filter tokens with non-alphabetic characters
+df['Tokens'] = df['Tokens'].apply(lambda l: [t for t in l if t.is_alpha])
+
+# Filter by POS
+valid_tags = {'ADJ', 'ADV', 'INTJ', 'NOUN', 'PROPN', 'VERB'}
+df['Tokens'] = df['Tokens'].apply(lambda l: [t for t in l if t.pos_ in valid_tags])
+
+# Lowercase tokens
+df['Tokens'] = df['Tokens'].apply(lambda l: [t.lower_ for t in l])
+
+# Replace each token with its lemma
+#df['Tokens'] = df['Tokens'].apply(lambda l: [t.lemma_ for t in l])
+
+for _,row in df.sample(5).iterrows():
+    print([t for t in row['Tokens']])
+    print()
+    
+#%% Filter stopwords
+    
+# Look at most common tokens
+Counter([t for l in df['Tokens'] for t in l]).most_common(20)
+    
+from spacy.lang.en.stop_words import STOP_WORDS
+print(STOP_WORDS)
+print('Number of stopwords: ', len(STOP_WORDS))    
+
+from sklearn.feature_extraction.stop_words import ENGLISH_STOP_WORDS
+print(ENGLISH_STOP_WORDS)
+print('Number of stopwords: ', len(ENGLISH_STOP_WORDS))    
+
+df['Tokens'] = df['Tokens'].apply(lambda l: [t for t in l if t not in STOP_WORDS])
+Counter([t for l in df['Tokens'] for t in l]).most_common(20)
+
+#%% Filter based on document frequency
+
+vocab = set([t for l in df['Tokens'] for t in l])
+print(len(vocab))
+
+doc_count = Counter()
+for token_list in df['Tokens']:
+    doc_count.update(set(token_list))
+    
+num_docs = len(df)
+doc_freq = {k: v/num_docs for (k,v) in doc_count.items()}
+
+min_df = 2     # minimum number of documents token must appear in
+max_df = 0.5   # maximum percentage of documents token can appear in
+df['Tokens'] = df['Tokens'].apply(lambda l: [t for t in l if doc_count[t] >= min_df])
+df['Tokens'] = df['Tokens'].apply(lambda l: [t for t in l if doc_freq[t] <= max_df])
+
+Counter([t for l in df['Tokens'] for t in l]).most_common(20)
+
+for _,row in df.sample(5).iterrows():
+    print([t for t in row['Tokens']])
+    print()
+
+    
+#%% tfidf
+    
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+corpus = [['the','sun','is','shining','today','it','is','a','great','day'],
+          ['today','is','my','birthday','going','to','the','circus'],
+          ['rain','again','today','is','the','sun','ever','coming','back'],
+          ['check','the','weather','rain','or','sun','today']]
+
+vectorizer = TfidfVectorizer()
+tfidf_matrix =  vectorizer.fit_transform([' '.join(doc) for doc in corpus])
+feature_names = vectorizer.get_feature_names()
+
+doc = 1
+feature_index = tfidf_matrix[doc,:].nonzero()[1]
+tfidf_scores = list(zip(feature_index, 
+                        [feature_names[i] for i in feature_index],
+                        [tfidf_matrix[doc, i] for i in feature_index]))
+
+print(corpus[doc])
+for idx, word, score in tfidf_scores:
+  print((idx, word, score))
+  
+# Check similarity between words
+
+from sklearn.metrics.pairwise import cosine_similarity
+
+idx_rain = 14
+idx_sun = 16
+idx_birthday = 2
+vec_rain = tfidf_matrix[:, idx_rain].todense()
+vec_sun = tfidf_matrix[:, idx_sun].todense()
+vec_birthday = tfidf_matrix[:, idx_birthday].todense()
+
+from scipy import spatial
+print('rain-sun similarity: ', 1 - spatial.distance.cosine(vec_rain, vec_sun))
+print('rain-birthday similarity: ', 1 - spatial.distance.cosine(vec_rain, vec_birthday))
+
+# Check similarity between documents
+
+doc1_vec = tfidf_matrix[1,:].todense()
+doc2_vec = tfidf_matrix[2,:].todense()
+doc3_vec = tfidf_matrix[3,:].todense()
+print('doc1-doc3 similarity: ', 1 - spatial.distance.cosine(doc1_vec, doc3_vec))
+print('doc2-doc3 similarity: ', 1 - spatial.distance.cosine(doc2_vec, doc3_vec))
+
+#%% word2vec
+
+# Check similarity between words
+print('rain-sun similarity: ', 1 - spatial.distance.cosine(nlp('rain').vector, nlp('sun').vector))
+print('rain-birthday similarity: ', 1 - spatial.distance.cosine(nlp('rain').vector, nlp('birthday').vector))
+
+doc = corpus[0]
+word2vec_matrix = np.array([np.mean([nlp(t).vector for t in doc], axis=0) for doc in corpus])
+
+# Check similarity between documents
+doc1_vec = word2vec_matrix[1,:]
+doc2_vec = word2vec_matrix[2,:]
+doc3_vec = word2vec_matrix[3,:]
+print('doc1-doc3 similarity: ', 1 - spatial.distance.cosine(doc1_vec, doc3_vec))
+print('doc2-doc3 similarity: ', 1 - spatial.distance.cosine(doc2_vec, doc3_vec))
+
