@@ -56,3 +56,16 @@ plot_h=plot_cluster(d_tsne_1_original, "cl_hierarchical", "Set1")
 
 ## and finally: putting the plots side by side with gridExtra lib...
 grid.arrange(plot_k, plot_h,  ncol=2)
+
+#shows the Z-scores (scaled) ONLY FOR TWO DIMENSIONS created by TSNE --> different process below
+fit_cluster_kmeans$centers
+
+#create z-scores (scaled) as a dataframe to be read later
+top1000_scaled <- as.data.frame(lapply(top1000, scale))
+#break into 5 clusters
+scaled_clusters <- kmeans(top1000_scaled, 5)
+#show how many are in each cluster
+scaled_clusters$size
+#show the dataframe z-scores by cluster across the relevant columns
+scaled_clusters$centers
+
