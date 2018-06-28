@@ -65,8 +65,12 @@ grid.arrange(plot_k, plot_h,  ncol=2)
 #shows the Z-scores (scaled) ONLY FOR TWO DIMENSIONS created by TSNE --> different process below
 fit_cluster_kmeans$centers
 
+#choose the columns we want to look at
+keeps <- c("Prior", "Post", "Maker_vol", "Taker_vol")
+top1000[keeps]
+
 #create z-scores (scaled) as a dataframe to be read later
-top1000_scaled <- as.data.frame(lapply(top1000, scale))
+top1000_scaled <- as.data.frame(lapply(top1000[keeps], scale))
 #break into 5 clusters
 scaled_clusters <- kmeans(top1000_scaled, 5)
 #show how many are in each cluster
@@ -78,7 +82,7 @@ scaled_clusters$centers
 ggplot(data = d_tsne_1_original, aes(x = d_tsne_1_original$V1, d_tsne_1_original$V2, color = d_tsne_1_original$cl_kmeans)) +
   geom_point(size = 0.25) + 
   ggtitle("Kmeans clustering in TSNE") +
-  xlab("V1") + ylab("V2") + 
+  xlab("") + ylab("") + 
   guides(colour=guide_legend(override.aes=list(size=6))) + 
   theme(legend.position = "bottom", legend.direction = "horizontal", legend.box = "horizontal")
 
